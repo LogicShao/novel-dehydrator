@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>小说速读</title>
+  <script>
+    (function() {
+      const t = localStorage.getItem('theme');
+      const dark = t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (dark) document.documentElement.classList.add('dark');
+      if (!t) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+          document.documentElement.classList.toggle('dark', e.matches);
+        });
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    .hero {
+      padding: 56px 0 36px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: clamp(36px, 5.6vw, 56px);
+      font-weight: 600;
+      letter-spacing: -0.025em;
+      line-height: 1.05;
+      background: linear-gradient(180deg, var(--text) 0%, var(--text-2) 130%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .hero p {
+      margin: 14px auto 0;
+      max-width: 540px;
+      font-size: 17px;
+      color: var(--text-2);
+      letter-spacing: -0.005em;
+    }
+
+    .shelf-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 18px;
+    }
+    @media (max-width: 640px) {
+      .shelf-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+      .hero { padding: 32px 0 24px; }
+    }
+
+    .book-card {
+      position: relative;
+      padding: 20px 20px 18px;
+      cursor: pointer;
+      overflow: hidden;
+    }
+    .book-card[data-disabled="true"] { cursor: default; }
+    .book-card:hover .book-cover { transform: rotateY(-8deg) translateY(-2px); }
+    .book-card:hover .card-actions { opacity: 1; transform: translateY(0); }
+
+    .book-cover {
+      width: 78px; height: 104px;
+      border-radius: 4px 8px 8px 4px;
+      background: linear-gradient(135deg, #5e8bd6 0%, #2e5db4 100%);
+      box-shadow:
+        inset 4px 0 0 rgba(0,0,0,0.18),
+        inset 6px 0 1px rgba(255,255,255,0.08),
+        4px 6px 14px rgba(0,0,0,0.18);
+      display: flex; align-items: flex-end; justify-content: center;
+      padding: 6px 0;
+      transform-origin: left center;
+      transition: transform 0.45s var(--ease-apple);
+      margin-bottom: 14px;
+    }
+    .book-cover.fmt-epub { background: linear-gradient(135deg, #5e8bd6 0%, #2e5db4 100%); }
+    .book-cover.fmt-txt  { background: linear-gradient(135deg, #6e6e73 0%, #3a3a3c 100%); }
+    .book-cover-label {
+      font-size: 9.5px; font-weight: 600;
+      color: rgba(255,255,255,0.85);
+      letter-spacing: 0.12em;
+    }
+
+    .book-title {
+      font-size: 14.5px; font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.01em;
+      line-height: 1.35;
+      display: -webkit-box;
+      -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden;
+      margin-bottom: 4px;
+      min-height: 2.7em;
+    }
+    .book-author { font-size: 12px; color: var(--text-2); }
+    .book-meta { font-size: 11.5px; color: var(--text-3); margin-top: 8px; }
+
+    .book-progress-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 10px;
+      font-size: 11px; color: var(--text-3);
+    }
+    .book-progress-row .progress { flex: 1; }
+
+    .status-corner {
+      position: absolute; top: 12px; right: 12px;
+    }
+
+    .card-actions {
+      position: absolute;
+      right: 14px;
+      bottom: 14px;
+      display: flex;
+      gap: 6px;
+      opacity: 0;
+      transform: translateY(4px);
+      transition: all 0.18s var(--ease-apple);
+    }
+    .card-action-btn {
+      width: 30px;
+      height: 30px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.86);
+      color: var(--text-2);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: all 0.16s var(--ease-apple);
+    }
+    .book-select-checkbox {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      z-index: 2;
+      accent-color: var(--primary);
+    }
+    .batch-action-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 16px;
+    }
+    .batch-count {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+    }
+    .dark .card-action-btn {
+      background: rgba(28,28,30,0.82);
+    }
+    .card-action-btn:hover {
+      color: var(--text);
+      border-color: var(--border-strong);
+      background: var(--surface);
+      transform: translateY(-1px);
+    }
+    .card-action-btn.danger:hover {
+      color: var(--danger);
+      border-color: rgba(215,0,21,0.22);
+      background: rgba(215,0,21,0.08);
+    }
+    @media (max-width: 768px) {
+      .card-actions {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    .empty {
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--text-3);
+    }
+    .empty-icon {
+      width: 64px; height: 64px;
+      margin: 0 auto 18px;
+      border-radius: 16px;
+      background: var(--surface-2);
+      display: grid; place-content: center;
+      color: var(--text-3);
+    }
+    .empty h3 { font-size: 18px; color: var(--text); font-weight: 500; margin-bottom: 6px; }
+    .empty p { font-size: 14px; color: var(--text-2); }
+
+    .dropzone {
+      border: 1.5px dashed var(--border-strong);
+      border-radius: 18px;
+      padding: 30px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s var(--ease-apple);
+      background: var(--surface);
+    }
+    .dropzone:hover, .dropzone.drag {
+      border-color: var(--accent);
+      background: linear-gradient(180deg, rgba(0,113,227,0.05) 0%, rgba(0,113,227,0.1) 100%);
+      transform: translateY(-1px);
+    }
+    .dropzone-icon {
+      width: 48px; height: 48px;
+      margin: 0 auto 14px;
+      border-radius: 14px;
+      background: var(--surface);
+      display: grid; place-content: center;
+      color: var(--accent);
+      box-shadow: var(--shadow-sm);
+    }
+    .dropzone-title {
+      margin: 0 0 6px;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+    .dropzone-subtitle {
+      margin: 0;
+      font-size: 12.5px;
+      color: var(--text-2);
+      line-height: 1.6;
+    }
+    .dropzone-actions {
+      margin-top: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .upload-count {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--text-2);
+      font-size: 12px;
+      font-weight: 500;
+      border: 1px solid var(--border);
+    }
+    .upload-list {
+      margin-top: 16px;
+      max-height: 240px;
+      overflow-y: auto;
+      padding: 8px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .upload-item {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+    .upload-item-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      display: grid;
+      place-content: center;
+      background: var(--surface-2);
+      color: var(--text-2);
+    }
+    .upload-item.is-uploading .upload-item-icon,
+    .upload-item.is-parsing .upload-item-icon {
+      color: var(--accent);
+      background: var(--accent-soft);
+    }
+    .upload-item.is-done .upload-item-icon {
+      color: var(--success);
+      background: rgba(48, 161, 78, 0.12);
+    }
+    .upload-item.is-error .upload-item-icon {
+      color: var(--danger);
+      background: rgba(215, 0, 21, 0.08);
+    }
+    .upload-item-main { min-width: 0; }
+    .upload-item-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .upload-item-note {
+      margin-top: 2px;
+      font-size: 11.5px;
+      color: var(--text-3);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .upload-progress-card {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+    }
+    .upload-progress-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: var(--text-2);
+    }
+    .upload-progress-top strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .status-dot {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--text-2);
+      padding: 6px 12px;
+      border-radius: 980px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .status-dot:hover { background: var(--surface-2); }
+    .status-dot::before {
+      content: ''; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--success);
+    }
+    .status-dot.warn::before { background: var(--warning); }
+
+    .layout { display: flex; gap: 28px; }
+    .folder-sidebar {
+      width: 180px;
+      flex-shrink: 0;
+      padding-top: 56px;
+    }
+    .folder-sidebar h3 {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-3);
+      margin: 0 0 10px 8px;
+    }
+    .folder-tab {
+      display: block;
+      width: 100%;
+      padding: 7px 10px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      color: var(--text-2);
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-bottom: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .folder-tab:hover { background: var(--surface-2); }
+    .folder-tab.active { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+    .folder-tab .count {
+      font-size: 11px;
+      color: var(--text-3);
+      margin-left: 4px;
+    }
+    .folder-new {
+      margin-top: 10px;
+    }
+    .folder-new input {
+      width: 100%;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 12px;
+      outline: none;
+    }
+    .folder-new input:focus { border-color: var(--accent); }
+    .folder-actions {
+      display: flex;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .folder-actions button {
+      flex: 1;
+      padding: 4px;
+      border-radius: 6px;
+      border: none;
+      font-size: 11px;
+      cursor: pointer;
+      background: var(--surface-2);
+      color: var(--text-2);
+    }
+    .folder-actions button:hover { background: var(--accent-soft); color: var(--accent); }
+    .folder-manager-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .folder-manager-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: start;
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+    }
+    .folder-manager-name {
+      min-width: 0;
+    }
+    .folder-manager-name strong {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .folder-manager-name span {
+      display: block;
+      margin-top: 2px;
+      font-size: 11.5px;
+      color: var(--text-3);
+    }
+    .folder-manager-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .folder-manager-create {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .folder-manager-create .btn {
+      min-width: 72px;
+    }
+    .folder-manager-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .folder-manager-header p {
+      margin: 0;
+      font-size: 12.5px;
+      color: var(--text-2);
+    }
+    .folder-manager-current {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .folder-manager-empty {
+      padding: 20px 14px;
+      text-align: center;
+      border-radius: 12px;
+      background: var(--surface-2);
+      border: 1px dashed var(--border-strong);
+      color: var(--text-3);
+      font-size: 12.5px;
+    }
+    .folder-manager-edit {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 8px;
+      align-items: center;
+      width: 100%;
+    }
+    .folder-context {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 14px 16px;
+      margin-bottom: 18px;
+      border-radius: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+    }
+    .folder-context-main {
+      min-width: 0;
+    }
+    .folder-context-main strong {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .folder-context-main span {
+      display: block;
+      margin-top: 3px;
+      font-size: 12px;
+      color: var(--text-3);
+    }
+    .folder-context-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .main-content { flex: 1; min-width: 0; }
+    @media (max-width: 768px) {
+      .layout { flex-direction: column; }
+      .folder-sidebar {
+        width: 100%;
+        padding-top: 0;
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+      }
+      .folder-sidebar h3 { display: none; }
+      .folder-tab { flex-shrink: 0; white-space: nowrap; width: auto; }
+      .folder-new { display: none; }
+      .folder-manager-create,
+      .folder-manager-edit {
+        grid-template-columns: 1fr;
+      }
+      .folder-manager-row,
+      .folder-context {
+        grid-template-columns: 1fr;
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .folder-manager-actions,
+      .folder-context-actions {
+        justify-content: flex-start;
+      }
+    }
+
+    .sort-select {
+      width: auto;
+      min-width: 96px;
+      font-size: 13px;
+      padding: 7px 30px 7px 12px;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 5L0 0h8z' fill='%23868e99'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      background-size: 8px 5px;
+    }
+    .sort-select:hover { background-color: var(--surface-2); }
+  </style>
+</head>
+<body x-data="bookShelf()" x-init="init()" x-cloak>
+
+  <header class="nav-glass">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text);">
+        <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5a2.5 2.5 0 0 0 0 5H20"/>
+        <path d="M4 4.5v15A2.5 2.5 0 0 0 6.5 22"/>
+      </svg>
+      <span class="nav-title">小说速读</span>
+    </div>
+
+    <div style="flex:1"></div>
+
+    <select class="select sort-select" x-model="sortBy" @change="reloadBooks()" title="排序方式">
+      <option value="created_at_desc">时间 ▼</option>
+      <option value="created_at_asc">时间 ▲</option>
+      <option value="title_asc">名称 ▲</option>
+      <option value="title_desc">名称 ▼</option>
+    </select>
+
+    <button class="btn btn-secondary" @click="openFolderManager()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v9A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5z"/></svg>
+      书单
+    </button>
+
+    <div class="status-dot" :class="{ warn: !apiKeyOk }" @click="openSettings()" :title="apiKeyOk ? 'API 已配置' : '点击配置 API Key'">
+      <span x-text="apiKeyOk ? 'API 已就绪' : '未配置 API'"></span>
+    </div>
+
+    <button class="icon-btn" @click="openSettings()" title="设置">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+
+    <button class="icon-btn" @click="toggleDark()" :title="isDark ? '切换浅色' : '切换深色'">
+      <svg x-show="!isDark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg x-show="isDark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+    </button>
+
+    <button class="btn btn-primary" @click="openUpload()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      导入书籍
+    </button>
+  </header>
+
+  <main style="max-width: 1180px; margin: 0 auto; padding: 0 24px 80px;">
+
+    <div class="layout">
+      <nav class="folder-sidebar" x-show="folders.length > 0 || showNewFolder">
+        <h3>书单</h3>
+        <button class="folder-tab" :class="{ active: selectedFolderId === null }" @click="selectFolder(null)">
+          全部书籍
+        </button>
+        <template x-for="f in folders" :key="f.id">
+          <div style="position:relative;">
+            <button class="folder-tab" :class="{ active: selectedFolderId === f.id }"
+              @click="selectFolder(f.id)" x-text="f.name">
+            </button>
+            <button @click.stop="deleteFolder(f)" title="删除书单"
+              style="position:absolute;right:4px;top:7px;background:none;border:none;color:var(--text-3);font-size:11px;cursor:pointer;padding:0 4px;">×</button>
+          </div>
+        </template>
+        <div class="folder-new" x-show="!showNewFolder">
+          <button class="folder-tab" style="color:var(--text-3);font-size:12px;" @click="showNewFolder = true">+ 新建书单</button>
+        </div>
+        <div class="folder-new" x-show="showNewFolder">
+          <input type="text" x-model="newFolderName" placeholder="书单名称" @keydown.enter="createFolder()">
+          <div class="folder-actions">
+            <button @click="createFolder()">保存</button>
+            <button @click="showNewFolder = false; newFolderName = ''">取消</button>
+          </div>
+        </div>
+      </nav>
+
+      <div class="main-content" @click="folderPickerBook = null">
+
+    <div x-show="selectedFolder" class="folder-context fade-in">
+      <div class="folder-context-main">
+        <strong x-text="selectedFolder?.name"></strong>
+        <span x-text="`${selectedFolder?.book_count || 0} 本书 · 当前按书单筛选`"></span>
+      </div>
+      <div class="folder-context-actions">
+        <button class="btn btn-secondary btn-sm" @click="openFolderManager()">管理书单</button>
+        <button class="btn btn-ghost btn-sm" @click="selectFolder(null)">清除筛选</button>
+      </div>
+    </div>
+
+    <section class="hero">
+      <h1>把厚书读薄</h1>
+      <p>上传 EPUB 或 TXT，让 AI 提炼章节核心，保留故事骨架，跳过水文铺垫。</p>
+    </section>
+
+    <div x-show="books.length === 0 && !loading" class="empty fade-in">
+      <div class="empty-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5a2.5 2.5 0 0 0 0 5H20"/>
+        </svg>
+      </div>
+      <h3>书架是空的</h3>
+      <p>点击右上角「导入书籍」开始</p>
+    </div>
+
+    <div x-show="loading" class="empty">
+      <p>加载中…</p>
+    </div>
+
+    <div x-show="isSelectionMode" class="batch-action-bar" x-cloak>
+      <span class="batch-count" x-text="`已选 ${selectedBookIds.size} 本`"></span>
+      <button class="btn btn-ghost btn-sm" @click="selectAllBooks()">全选</button>
+      <button class="btn btn-ghost btn-sm" @click="clearSelection()">清空</button>
+      <div style="flex:1"></div>
+      <div style="position:relative;">
+        <button class="btn btn-secondary btn-sm" @click.stop="batchMovePickerOpen = !batchMovePickerOpen">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v9A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5z"/></svg>
+          移到书单
+        </button>
+        <div x-show="batchMovePickerOpen" @click.outside="batchMovePickerOpen = false"
+          style="position:absolute;right:0;top:calc(100% + 4px);background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:6px;min-width:140px;box-shadow:var(--shadow-lg);z-index:20;">
+          <template x-for="f in folders" :key="f.id">
+            <button @click="batchMoveToFolder(f.id)"
+              style="display:block;width:100%;padding:6px 10px;border:none;background:transparent;text-align:left;font-size:12px;color:var(--text);cursor:pointer;border-radius:6px;"
+              @mouseover="$el.style.background='var(--surface-2)'" @mouseout="$el.style.background='transparent'"
+              x-text="f.name"></button>
+          </template>
+          <div x-show="folders.length === 0" style="padding:6px 10px;font-size:12px;color:var(--text-3);">暂无书单</div>
+        </div>
+      </div>
+      <button class="btn btn-sm" style="background:var(--danger);color:#fff;border-color:var(--danger);"
+        @click="batchDeleteTarget = true">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
+        删除
+      </button>
+    </div>
+
+    <div class="shelf-grid stagger" x-show="books.length > 0">
+      <template x-for="book in books" :key="book.id">
+        <article class="card-elev book-card"
+          :data-disabled="book.parse_status !== 'done'"
+          @click="book.parse_status === 'done' && (window.location.href = `/book/${book.id}`)">
+
+          <input type="checkbox"
+            :checked="selectedBookIds.has(book.id)"
+            @click.stop="toggleBookSelect(book.id)"
+            class="book-select-checkbox"
+            :aria-label="`选择《${book.title}》`">
+
+          <div class="status-corner">
+            <span x-show="book.parse_status === 'parsing'" class="pill pill-info">
+              <span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:currentColor;margin-right:5px;animation:pulse 1.4s ease-in-out infinite;"></span>
+              解析中
+            </span>
+            <span x-show="book.parse_status === 'failed'" class="pill pill-danger">解析失败</span>
+          </div>
+
+          <div class="book-cover" :class="`fmt-${book.source_format}`">
+            <span class="book-cover-label" x-text="book.source_format.toUpperCase()"></span>
+          </div>
+
+          <h3 class="book-title" x-text="book.title"></h3>
+          <p class="book-author" x-text="book.author || '未知作者'"></p>
+          <p class="book-meta" x-text="`${book.total_chapters} 章`"></p>
+
+          <div class="book-progress-row" x-show="book.total_chapters > 0">
+            <div class="progress thin">
+              <div :style="`width: ${book.total_chapters > 0 ? Math.round((book.dehydrated_count || 0) / book.total_chapters * 100) : 0}%`"></div>
+            </div>
+            <span x-text="`${book.dehydrated_count || 0}/${book.total_chapters}`"></span>
+          </div>
+
+          <div class="card-actions">
+            <button x-show="selectedFolderId === null" class="card-action-btn" @click.stop="showFolderPicker(book)" title="添加到书单" aria-label="添加到书单">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+            <button x-show="selectedFolderId !== null" class="card-action-btn" @click.stop="removeBookFromSelectedFolder(book)" title="移出当前书单" aria-label="移出当前书单">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v9A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5z"/></svg>
+            </button>
+            <button class="card-action-btn danger" @click.stop="confirmDelete(book)" title="删除书籍" aria-label="删除书籍">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4.8c0-.53 0-.8.1-1a1 1 0 0 1 .44-.44c.2-.1.47-.1 1-.1h4.92c.53 0 .8 0 1 .1a1 1 0 0 1 .44.44c.1.2.1.47.1 1V6"/><path d="M19 6v11.2c0 1.12 0 1.68-.22 2.11a2 2 0 0 1-.87.87c-.43.22-.99.22-2.11.22H8.2c-1.12 0-1.68 0-2.11-.22a2 2 0 0 1-.87-.87c-.22-.43-.22-.99-.22-2.11V6"/><path d="M10 10v6"/><path d="M14 10v6"/></svg>
+            </button>
+          </div>
+          <div x-show="folderPickerBook && folderPickerBook.id === book.id" @click.stop class="folder-dropdown" style="position:absolute;bottom:48px;right:8px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:6px;min-width:140px;box-shadow:var(--shadow-lg);z-index:10;">
+            <template x-for="f in folders" :key="f.id">
+              <button @click="addBookToFolder(book, f.id)" style="display:block;width:100%;padding:6px 10px;border:none;background:transparent;text-align:left;font-size:12px;color:var(--text);cursor:pointer;border-radius:6px;"
+                @mouseover="$el.style.background='var(--surface-2)'" @mouseout="$el.style.background='transparent'"
+                x-text="f.name"></button>
+            </template>
+            <div x-show="folders.length === 0" style="padding:6px 10px;font-size:12px;color:var(--text-3);">暂无书单</div>
+          </div>
+        </article>
+      </template>
+    </div>
+      </div><!-- .main-content -->
+    </div><!-- .layout -->
+  </main>
+
+  <div x-show="showSettings" x-cloak class="modal-backdrop" @click.self="showSettings = false" @keydown.escape.window="showSettings = false">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2 class="modal-title">设置</h2>
+      </div>
+      <div class="modal-body">
+        <div class="segmented" style="margin-bottom: 22px;">
+          <button :class="{ active: settingsTab === 'api' }" @click="settingsTab = 'api'">API 配置</button>
+          <button :class="{ active: settingsTab === 'prompt' }" @click="settingsTab = 'prompt'">脱水提示词</button>
+        </div>
+
+        <div x-show="settingsTab === 'api'" style="display:flex;flex-direction:column;gap:16px;">
+          <div>
+            <label class="label">API Key</label>
+            <div x-show="apiKeyOk && !showKeyInput" style="display:flex;align-items:center;gap:10px;padding:8px 0;">
+              <span class="pill pill-success">✓ 已配置</span>
+              <button @click="showKeyInput = true" type="button" style="background:none;border:none;color:var(--text-2);font-size:12px;cursor:pointer;text-decoration:underline;">更换密钥</button>
+            </div>
+            <div x-show="!apiKeyOk || showKeyInput">
+              <input type="password" class="input" x-model="newApiKey" placeholder="sk-..." autocomplete="off">
+              <p class="help" x-show="apiKeyOk">输入新密钥以替换当前密钥，留空则保持不变。</p>
+            </div>
+          </div>
+
+          <div>
+            <label class="label">模型</label>
+            <select class="select" x-model="settingsForm.deepseek_model">
+              <option value="deepseek-v4-flash">deepseek-v4-flash（快速）</option>
+              <option value="deepseek-v4-pro">deepseek-v4-pro（精细）</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="label">Base URL</label>
+            <input type="text" class="input" x-model="settingsForm.deepseek_base_url" placeholder="https://api.deepseek.com">
+            <p class="help">使用第三方中转时修改此项</p>
+          </div>
+
+          <div>
+            <label class="label">并行数</label>
+            <input type="number" class="input" x-model.number="settingsForm.concurrency" min="1" max="500">
+            <p class="help">同时处理的章节数（1-500），默认 20。越大越快但消耗更多 API 额度，请根据 API 限流情况调整。</p>
+          </div>
+        </div>
+
+        <div x-show="settingsTab === 'prompt'" style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <label class="label" style="margin:0;">系统提示词</label>
+              <div style="display:flex;align-items:center;gap:12px;">
+                <span x-show="!settingsForm.system_prompt" class="pill pill-success">内置默认</span>
+                <span x-show="settingsForm.system_prompt" class="pill pill-info">自定义</span>
+                <button @click="resetSystemPrompt()" style="background:none;border:none;color:var(--text-3);font-size:12px;cursor:pointer;" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text-3)'">恢复默认</button>
+              </div>
+            </div>
+            <textarea class="textarea" x-model="promptEditorContent" rows="14" placeholder="加载中…" style="font-family: var(--font-mono); font-size:12.5px; line-height:1.65;"></textarea>
+            <p class="help">修改后仅影响新的脱水任务。</p>
+          </div>
+
+          <details>
+            <summary style="cursor:pointer;list-style:none;font-size:12px;color:var(--text-2);padding:8px 0;display:flex;align-items:center;gap:6px;user-select:none;">
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor" style="transition:transform 0.2s;"><path d="M4 2l4 4-4 4z"/></svg>
+              查看其他内置提示词
+            </summary>
+            <div style="margin-top:12px;display:flex;flex-direction:column;gap:14px;">
+              <div>
+                <p class="label">用户消息模板</p>
+                <pre style="font-family:var(--font-mono);font-size:11.5px;background:var(--surface-2);border-radius:10px;padding:12px;color:var(--text-2);overflow-x:auto;white-space:pre-wrap;line-height:1.6;margin:0;" x-text="defaultPrompts?.user || '加载中…'"></pre>
+              </div>
+              <div>
+                <p class="label">早期章节额外提示</p>
+                <pre style="font-family:var(--font-mono);font-size:11.5px;background:var(--surface-2);border-radius:10px;padding:12px;color:var(--text-2);overflow-x:auto;white-space:pre-wrap;line-height:1.6;margin:0;" x-text="defaultPrompts?.position_early || '加载中…'"></pre>
+              </div>
+              <div>
+                <p class="label">正常章节提示</p>
+                <pre style="font-family:var(--font-mono);font-size:11.5px;background:var(--surface-2);border-radius:10px;padding:12px;color:var(--text-2);overflow-x:auto;white-space:pre-wrap;line-height:1.6;margin:0;" x-text="defaultPrompts?.position_normal || '加载中…'"></pre>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <div x-show="settingsSaved" style="margin-top:14px; font-size:12.5px; color:var(--success); display:flex;align-items:center;gap:6px;">✓ 已保存</div>
+        <div x-show="settingsError" style="margin-top:14px; font-size:12.5px; color:var(--danger);" x-text="settingsError"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" @click="showSettings = false">取消</button>
+        <button class="btn btn-primary" @click="saveSettings()" :disabled="savingSettings">
+          <span x-text="savingSettings ? '保存中…' : '保存'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div x-show="showFolderManager" x-cloak class="modal-backdrop" @click.self="showFolderManager = false" @keydown.escape.window="showFolderManager = false">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2 class="modal-title">书单管理</h2>
+      </div>
+      <div class="modal-body">
+        <div class="folder-manager-header">
+          <p>创建、重命名、删除书单，并快速切换筛选。</p>
+          <div x-show="selectedFolder" class="folder-manager-current" x-text="`当前：${selectedFolder?.name}`"></div>
+        </div>
+
+        <div class="folder-manager-create">
+          <input class="input" type="text" x-model="newFolderName" placeholder="新建书单名称" @keydown.enter.prevent="createFolder()">
+          <button class="btn btn-primary" @click="createFolder()">新建</button>
+        </div>
+
+        <div class="folder-manager-list" x-show="folders.length > 0">
+          <template x-for="f in folders" :key="f.id">
+            <div class="folder-manager-row">
+              <template x-if="editingFolderId !== f.id">
+                <div style="display:contents;">
+                  <div class="folder-manager-name">
+                    <strong x-text="f.name"></strong>
+                    <span x-text="`${f.book_count || 0} 本书`"></span>
+                  </div>
+                  <div class="folder-manager-actions">
+                    <button class="btn btn-secondary btn-sm" @click="selectFolder(f.id); showFolderManager = false">查看</button>
+                    <button class="btn btn-ghost btn-sm" @click="startRenameFolder(f)">重命名</button>
+                    <button class="icon-btn" @click="deleteFolder(f)" title="删除书单" aria-label="删除书单">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M3 6h18"/><path d="M8 6V4.8c0-.53 0-.8.1-1a1 1 0 0 1 .44-.44c.2-.1.47-.1 1-.1h4.92c.53 0 .8 0 1 .1a1 1 0 0 1 .44.44c.1.2.1.47.1 1V6"/><path d="M19 6v11.2c0 1.12 0 1.68-.22 2.11a2 2 0 0 1-.87.87c-.43.22-.99.22-2.11.22H8.2c-1.12 0-1.68 0-2.11-.22a2 2 0 0 1-.87-.87c-.22-.43-.22-.99-.22-2.11V6"/><path d="M10 10v6"/><path d="M14 10v6"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </template>
+              <template x-if="editingFolderId === f.id">
+                <div class="folder-manager-edit" style="grid-column: 1 / -1;">
+                  <input class="input" type="text" x-model="editingFolderName" @keydown.enter.prevent="saveFolderRename(f)">
+                  <button class="btn btn-primary btn-sm" @click="saveFolderRename(f)">保存</button>
+                  <button class="btn btn-ghost btn-sm" @click="cancelFolderRename()">取消</button>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <div x-show="folders.length === 0" class="folder-manager-empty">
+          还没有书单，先创建一个用于整理书架。
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" @click="showFolderManager = false">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div x-show="showUpload" x-cloak class="modal-backdrop" @click.self="showUpload = false" @keydown.escape.window="showUpload = false">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2 class="modal-title">导入书籍</h2>
+        <div x-show="uploadFiles.length > 0" class="upload-count" x-text="`已选 ${uploadFiles.length} 个文件`"></div>
+      </div>
+      <div class="modal-body">
+        <div class="dropzone" :class="{ drag: isDragging }"
+          @click="$refs.fileInput.click()"
+          @dragover.prevent="isDragging = true"
+          @dragleave.prevent="isDragging = false"
+          @drop.prevent="isDragging = false; handleDrop($event)">
+          <div class="dropzone-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          </div>
+          <p class="dropzone-title">拖拽文件到此处</p>
+          <p class="dropzone-subtitle">支持 `.epub` 与 `.txt`，可一次导入多个文件。</p>
+          <div class="dropzone-actions">
+            <button type="button" class="btn btn-secondary btn-sm">选择文件</button>
+            <span class="pill pill-info">EPUB / TXT</span>
+            <span class="pill pill-info">多文件</span>
+          </div>
+          <input x-ref="fileInput" type="file" accept=".epub,.txt" multiple style="display:none;" @change="handleFile($event)">
+        </div>
+
+        <div x-show="uploadFiles.length > 0" class="upload-list">
+          <template x-for="(f, i) in uploadFiles" :key="i">
+            <div class="upload-item"
+              :class="{
+                'is-uploading': f.status === 'uploading',
+                'is-parsing': f.status === 'parsing',
+                'is-done': f.status === 'done',
+                'is-error': f.status === 'error'
+              }">
+              <div class="upload-item-icon">
+                <svg x-show="f.status === 'uploading' || f.status === 'parsing'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6M12 16v6M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M2 12h6M16 12h6M4.93 19.07l4.24-4.24M14.83 9.17l4.24-4.24"/></svg>
+                <svg x-show="f.status === 'done'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                <svg x-show="f.status === 'error'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </div>
+              <div class="upload-item-main">
+                <div class="upload-item-name" x-text="f.name"></div>
+                <div class="upload-item-note"
+                  x-text="f.status === 'uploading' ? '文件上传中…' : f.status === 'parsing' ? '服务器解析中…' : f.status === 'done' ? '已加入书库' : (f.error || '上传失败')"></div>
+              </div>
+              <span class="pill"
+                :class="{
+                  'pill-info': f.status === 'uploading' || f.status === 'parsing',
+                  'pill-success': f.status === 'done',
+                  'pill-danger': f.status === 'error'
+                }"
+                x-text="f.status === 'uploading' ? '上传中' : f.status === 'parsing' ? '解析中' : f.status === 'done' ? '完成' : '失败'"></span>
+            </div>
+          </template>
+        </div>
+
+        <div x-show="uploadFiles.length > 0" class="upload-progress-card">
+          <div class="upload-progress-top">
+            <strong>处理进度</strong>
+            <span x-text="`${uploadDone}/${uploadTotal} 已完成`"></span>
+          </div>
+          <div class="progress">
+            <div :style="`width: ${uploadTotal ? Math.round(uploadDone / uploadTotal * 100) : 0}%`"></div>
+          </div>
+        </div>
+
+        <div x-show="uploadError" style="margin-top:12px;font-size:12.5px;color:var(--danger);" x-text="uploadError"></div>
+      </div>
+    </div>
+  </div>
+
+  <div x-show="deleteTarget" x-cloak class="modal-backdrop" @click.self="deleteTarget = null" @keydown.escape.window="deleteTarget = null">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2 class="modal-title">删除书籍</h2>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13.5px;color:var(--text-2);margin:0;line-height:1.55;">
+          确定要删除《<span x-text="deleteTarget?.title" style="color:var(--text);font-weight:500;"></span>》吗？此操作无法撤销，已脱水的内容也会一并删除。
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" @click="deleteTarget = null">取消</button>
+        <button class="btn btn-danger" @click="doDelete()">删除</button>
+      </div>
+    </div>
+  </div>
+
+  <div x-show="batchDeleteTarget" x-cloak class="modal-backdrop" @click.self="batchDeleteTarget = false" @keydown.escape.window="batchDeleteTarget = false">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2 class="modal-title">批量删除</h2>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13.5px;color:var(--text-2);margin:0;line-height:1.55;">
+          确定要删除已选的 <strong x-text="selectedBookIds.size"></strong> 本书籍吗？此操作无法撤销，已脱水的内容也会一并删除。
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" @click="batchDeleteTarget = false">取消</button>
+        <button class="btn btn-danger" @click="batchDelete()">确认删除</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    details[open] > summary svg { transform: rotate(90deg); }
+  </style>
+
+<script>
+function bookShelf() {
+  return {
+    books: [], loading: true,
+    sortBy: 'created_at_desc',
+    folders: [], selectedFolderId: null,
+    showNewFolder: false, newFolderName: '',
+    folderPickerBook: null,
+    showUpload: false, uploadFiles: [], uploadProgress: false, uploadDone: 0, uploadTotal: 0,
+    uploadError: '', isDragging: false,
+    showFolderManager: false,
+    editingFolderId: null,
+    editingFolderName: '',
+    deleteTarget: null,
+    selectedBookIds: new Set(),
+    batchDeleteTarget: false,
+    batchMovePickerOpen: false,
+    pollTimers: {},
+    isDark: document.documentElement.classList.contains('dark'),
+    showSettings: false, showKeyInput: false, newApiKey: '', apiKeyOk: false,
+    settingsTab: 'api',
+    settingsForm: {
+      deepseek_api_key: '', deepseek_model: 'deepseek-v4-flash',
+      deepseek_base_url: 'https://api.deepseek.com',
+      concurrency: 20, system_prompt: '',
+    },
+    savingSettings: false, settingsSaved: false, settingsError: '',
+    defaultPrompts: null, promptEditorContent: '',
+
+    get selectedFolder() {
+      return this.folders.find(f => f.id === this.selectedFolderId) || null;
+    },
+
+    async init() {
+      await Promise.all([this.loadBooks(), this.loadSettings(), this.loadFolders()]);
+      this.loading = false;
+      this.$watch('settingsTab', v => { if (v === 'prompt') this.onPromptTabOpen(); });
+    },
+
+    toggleDark() {
+      this.isDark = !this.isDark;
+      document.documentElement.classList.toggle('dark', this.isDark);
+      localStorage.setItem('theme', this.isDark ? 'dark' : 'light');
+    },
+
+    async loadSettings() {
+      try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        this.settingsForm = { ...data };
+        this.apiKeyOk = data.api_key_configured || false;
+        this.promptEditorContent = data.system_prompt || '';
+      } catch (e) { /* ignore */ }
+    },
+
+    async onPromptTabOpen() {
+      if (!this.defaultPrompts) {
+        try {
+          const res = await fetch('/api/prompts/defaults');
+          if (res.ok) this.defaultPrompts = await res.json();
+        } catch (e) { /* ignore */ }
+      }
+      if (!this.promptEditorContent && this.defaultPrompts) {
+        this.promptEditorContent = this.defaultPrompts.system;
+      }
+    },
+
+    resetSystemPrompt() {
+      this.settingsForm.system_prompt = '';
+      this.promptEditorContent = this.defaultPrompts?.system || '';
+    },
+
+    openSettings() {
+      this.settingsSaved = false; this.settingsError = '';
+      this.settingsTab = 'api'; this.showKeyInput = false; this.newApiKey = '';
+      this.showSettings = true;
+    },
+
+    openFolderManager() {
+      this.folderPickerBook = null;
+      this.showFolderManager = true;
+    },
+
+    startRenameFolder(folder) {
+      this.editingFolderId = folder.id;
+      this.editingFolderName = folder.name;
+    },
+
+    cancelFolderRename() {
+      this.editingFolderId = null;
+      this.editingFolderName = '';
+    },
+
+    async saveSettings() {
+      this.savingSettings = true; this.settingsSaved = false; this.settingsError = '';
+      try {
+        const isDefaultContent = this.defaultPrompts && this.promptEditorContent === this.defaultPrompts.system;
+        const effectivePrompt = isDefaultContent ? '' : this.promptEditorContent;
+        const apiKeyToSend = this.newApiKey ? this.newApiKey : this.settingsForm.deepseek_api_key;
+        const payload = { ...this.settingsForm, deepseek_api_key: apiKeyToSend, system_prompt: effectivePrompt };
+        const res = await fetch('/api/settings', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('保存失败');
+        const data = await res.json();
+        this.settingsForm = { ...data };
+        this.apiKeyOk = data.api_key_configured || false;
+        this.newApiKey = '';
+        this.showKeyInput = false;
+        this.settingsSaved = true;
+        setTimeout(() => { this.settingsSaved = false; }, 2500);
+      } catch (e) { this.settingsError = e.message; }
+      finally { this.savingSettings = false; }
+    },
+
+    async loadBooks() {
+      const [sort, order] = this.sortBy.split('_');
+      let url = `/api/books?sort=${sort}&order=${order}`;
+      if (this.selectedFolderId !== null) {
+        url += `&folder_id=${this.selectedFolderId}`;
+      }
+      const res = await fetch(url);
+      const data = await res.json();
+      this.books = data;
+      data.filter(b => b.parse_status === 'parsing').forEach(b => this.pollParse(b.id));
+    },
+
+    reloadBooks() {
+      this.loading = true;
+      this.loadBooks().then(() => { this.loading = false; });
+    },
+
+    async loadFolders() {
+      try {
+        const res = await fetch('/api/folders');
+        this.folders = await res.json();
+      } catch (e) { /* ignore */ }
+    },
+
+    selectFolder(folderId) {
+      this.clearSelection();
+      this.selectedFolderId = folderId;
+      this.loading = true;
+      this.loadBooks().then(() => { this.loading = false; });
+    },
+
+    async createFolder() {
+      const name = this.newFolderName.trim();
+      if (!name) return;
+      try {
+        const res = await fetch('/api/folders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+        if (res.ok) {
+          await this.loadFolders();
+          this.showNewFolder = false;
+          this.newFolderName = '';
+        }
+      } catch (e) { /* ignore */ }
+    },
+
+    async saveFolderRename(folder) {
+      const name = this.editingFolderName.trim();
+      if (!name) return;
+      try {
+        const res = await fetch(`/api/folders/${folder.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+        if (res.ok) {
+          await this.loadFolders();
+          this.cancelFolderRename();
+        }
+      } catch (e) { /* ignore */ }
+    },
+
+    async deleteFolder(folder) {
+      if (!confirm(`确定要删除书单「${folder.name}」吗？`)) return;
+      try {
+        await fetch(`/api/folders/${folder.id}`, { method: 'DELETE' });
+        if (this.selectedFolderId === folder.id) this.selectedFolderId = null;
+        if (this.editingFolderId === folder.id) this.cancelFolderRename();
+        await Promise.all([this.loadFolders(), this.loadBooks()]);
+      } catch (e) { /* ignore */ }
+    },
+
+    showFolderPicker(book) {
+      this.folderPickerBook = this.folderPickerBook?.id === book.id ? null : book;
+    },
+
+    async addBookToFolder(book, folderId) {
+      try {
+        await fetch(`/api/folders/${folderId}/books`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ book_ids: [book.id] }),
+        });
+        this.folderPickerBook = null;
+        await this.loadFolders();
+      } catch (e) { /* ignore */ }
+    },
+
+    async removeBookFromSelectedFolder(book) {
+      if (this.selectedFolderId === null) return;
+      try {
+        await fetch(`/api/folders/${this.selectedFolderId}/books/${book.id}`, { method: 'DELETE' });
+        this.folderPickerBook = null;
+        await Promise.all([this.loadFolders(), this.loadBooks()]);
+      } catch (e) { /* ignore */ }
+    },
+
+    openUpload() {
+      this.uploadFiles = []; this.uploadProgress = false;
+      this.uploadDone = 0; this.uploadTotal = 0; this.uploadError = '';
+      this.showUpload = true;
+    },
+
+    pollParse(bookId) {
+      if (this.pollTimers[bookId]) return;
+      this.pollTimers[bookId] = setInterval(async () => {
+        const res = await fetch(`/api/books/${bookId}`);
+        const updated = await res.json();
+        const idx = this.books.findIndex(b => b.id === bookId);
+        if (idx >= 0) this.books[idx] = { ...this.books[idx], ...updated };
+        if (updated.parse_status !== 'parsing') {
+          clearInterval(this.pollTimers[bookId]);
+          delete this.pollTimers[bookId];
+        }
+      }, 2000);
+    },
+
+    async handleFile(e) {
+      const files = Array.from(e.target.files);
+      if (files.length) await this.uploadBatch(files);
+      e.target.value = '';
+    },
+
+    async handleDrop(e) {
+      const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.epub') || f.name.endsWith('.txt'));
+      if (files.length) await this.uploadBatch(files);
+    },
+
+    async uploadBatch(files) {
+      this.uploadFiles = files.map(f => ({ name: f.name, file: f, status: 'uploading', error: '' }));
+      this.uploadProgress = true;
+      this.uploadDone = 0;
+      this.uploadTotal = files.length;
+      this.uploadError = '';
+
+      const fd = new FormData();
+      for (const f of files) {
+        fd.append('files', f, f.name);
+      }
+
+      try {
+        const res = await fetch('/api/books/upload', { method: 'POST', body: fd });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          for (const item of this.uploadFiles) {
+            item.status = 'error';
+            item.error = err.detail || `上传失败 (${res.status})`;
+            this.uploadDone++;
+          }
+        } else {
+          const data = await res.json();
+          const results = data.results || [];
+          for (let i = 0; i < this.uploadFiles.length; i++) {
+            const item = this.uploadFiles[i];
+            const result = results[i];
+            if (!result || result.error) {
+              item.status = 'error';
+              item.error = result?.error || '未知错误';
+            } else {
+              item.status = 'parsing';
+              if (result.book_id) this.pollParse(result.book_id);
+            }
+            this.uploadDone++;
+          }
+        }
+      } catch (err) {
+        for (const item of this.uploadFiles) {
+          item.status = 'error';
+          item.error = err.message || '网络错误';
+          this.uploadDone++;
+        }
+      }
+
+      await this.loadBooks();
+      this.uploadProgress = false;
+
+      const allDone = this.uploadFiles.every(f => f.status !== 'uploading' && f.status !== 'pending');
+      if (allDone) {
+        setTimeout(() => {
+          this.showUpload = false;
+          this.uploadFiles = [];
+        }, 2000);
+      }
+    },
+
+    toggleBookSelect(bookId) {
+      const s = new Set(this.selectedBookIds);
+      if (s.has(bookId)) { s.delete(bookId); } else { s.add(bookId); }
+      this.selectedBookIds = s;
+    },
+    selectAllBooks() {
+      this.selectedBookIds = new Set(this.books.map(b => b.id));
+    },
+    clearSelection() {
+      this.selectedBookIds = new Set();
+      this.batchDeleteTarget = false;
+      this.batchMovePickerOpen = false;
+    },
+    get isSelectionMode() {
+      return this.selectedBookIds.size > 0;
+    },
+    async batchDelete() {
+      const ids = Array.from(this.selectedBookIds);
+      const res = await fetch('/api/books/batch-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ book_ids: ids }),
+      });
+      const data = await res.json();
+      const deleted = new Set(data.deleted || []);
+      this.books = this.books.filter(b => !deleted.has(b.id));
+      this.clearSelection();
+      this.batchDeleteTarget = false;
+    },
+    async batchMoveToFolder(folderId) {
+      const ids = Array.from(this.selectedBookIds);
+      await fetch(`/api/folders/${folderId}/books`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ book_ids: ids }),
+      });
+      this.clearSelection();
+      this.batchMovePickerOpen = false;
+      await this.loadFolders();
+    },
+
+    confirmDelete(book) { this.deleteTarget = book; },
+
+    async doDelete() {
+      if (!this.deleteTarget) return;
+      await fetch(`/api/books/${this.deleteTarget.id}`, { method: 'DELETE' });
+      this.books = this.books.filter(b => b.id !== this.deleteTarget.id);
+      this.deleteTarget = null;
+    },
+  };
+}
+</script>
+</body>
+</html>

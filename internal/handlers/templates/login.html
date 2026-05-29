@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录 — 小说速读</title>
+  <script>
+    (function() {
+      const t = localStorage.getItem('theme');
+      const dark = t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (dark) document.documentElement.classList.add('dark');
+      if (!t) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+          document.documentElement.classList.toggle('dark', e.matches);
+        });
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+      background:
+        radial-gradient(circle at top, rgba(0, 113, 227, 0.12), transparent 32%),
+        var(--bg);
+    }
+    .dark body {
+      background:
+        radial-gradient(circle at top, rgba(41, 151, 255, 0.14), transparent 32%),
+        var(--bg);
+    }
+    .login-shell {
+      width: 100%;
+      max-width: 420px;
+    }
+    .login-card {
+      padding: 32px 30px 28px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-lg);
+    }
+    .login-brand {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .login-logo {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      display: grid;
+      place-content: center;
+      color: #fff;
+      background: linear-gradient(135deg, var(--accent) 0%, #5e8bd6 100%);
+      box-shadow: var(--shadow);
+      margin-bottom: 14px;
+    }
+    .login-brand h1 {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+    }
+    .login-brand p {
+      margin: 8px 0 0;
+      color: var(--text-2);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .login-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .login-error {
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(215, 0, 21, 0.08);
+      border: 1px solid rgba(215, 0, 21, 0.18);
+      color: var(--danger);
+      font-size: 12.5px;
+    }
+    .login-footer {
+      margin-top: 18px;
+      text-align: center;
+      color: var(--text-3);
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body x-data="loginPage()">
+  <main class="login-shell">
+    <section class="card-elev login-card">
+      <div class="login-brand">
+        <div class="login-logo" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5a2.5 2.5 0 0 0 0 5H20"/>
+            <path d="M4 4.5v15A2.5 2.5 0 0 0 6.5 22"/>
+          </svg>
+        </div>
+        <h1>小说速读</h1>
+        <p>请输入访问密码以继续浏览和使用脱水功能。</p>
+      </div>
+
+      <form class="login-form" @submit.prevent="submit()">
+        <div>
+          <label class="label" for="password">访问密码</label>
+          <input
+            id="password"
+            class="input"
+            type="password"
+            x-model="password"
+            placeholder="请输入密码"
+            autocomplete="current-password"
+            required
+          >
+        </div>
+
+        <div x-show="error" x-text="error" class="login-error"></div>
+
+        <button class="btn btn-primary btn-lg" type="submit" :disabled="loading || !password.trim()">
+          <span x-show="!loading">登录</span>
+          <span x-show="loading">登录中…</span>
+        </button>
+      </form>
+
+      <div class="login-footer">登录状态会保存在当前浏览器会话中。</div>
+    </section>
+  </main>
+
+  <script>
+    function loginPage() {
+      const requestedNext = new URLSearchParams(window.location.search).get('next') || '/';
+      const safeNext = requestedNext.startsWith('/') ? requestedNext : '/';
+
+      return {
+        password: '',
+        error: '',
+        loading: false,
+        nextUrl: safeNext,
+        async submit() {
+          this.loading = true;
+          this.error = '';
+
+          try {
+            const res = await fetch('/api/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ password: this.password })
+            });
+
+            if (!res.ok) {
+              let detail = '登录失败，请检查密码后重试';
+              try {
+                const data = await res.json();
+                detail = data.detail || detail;
+              } catch (_) {}
+              throw new Error(detail);
+            }
+
+            window.location.href = this.nextUrl || '/';
+          } catch (err) {
+            this.error = err.message || '登录失败，请稍后重试';
+          } finally {
+            this.loading = false;
+          }
+        }
+      }
+    }
+  </script>
+</body>
+</html>
