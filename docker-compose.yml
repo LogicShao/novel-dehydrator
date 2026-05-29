@@ -1,0 +1,41 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8765:8765"
+    environment:
+      DATABASE_URL: postgres://dehydrator:dehydrator@db:5432/novel_dehydrator?sslmode=disable
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEHYDRATE_CONCURRENCY: ${DEHYDRATE_CONCURRENCY:-5}
+      MAX_RETRIES: ${MAX_RETRIES:-3}
+      CHUNK_CHAR_LIMIT: ${CHUNK_CHAR_LIMIT:-12000}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:-}
+      DATA_DIR: /data
+    volumes:
+      - dehydrator_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: dehydrator
+      POSTGRES_PASSWORD: dehydrator
+      POSTGRES_DB: novel_dehydrator
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dehydrator -d novel_dehydrator"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  dehydrator_data:
