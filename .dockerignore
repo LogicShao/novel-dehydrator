@@ -1,0 +1,18 @@
+# Git
+.git
+
+# Binaries
+/dehydrator
+*.exe
+*.test
+
+# Environment
+.env
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
